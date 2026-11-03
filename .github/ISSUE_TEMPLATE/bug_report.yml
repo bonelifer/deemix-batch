@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in deemix-batch isn't working.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: script
+    attributes:
+      label: Which script?
+      options:
+        - download_artists.py
+        - deemix_artist_download_all.py
+        - sync_to_dest.py
+        - retry_failed_tracks.py
+        - check_missing_tracks.py
+        - install.sh / systemd units
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you ran (the full command), what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The script's output or error. Never paste your Deezer ARL or the contents of ~/.config/deemix/.arl.
+      render: text
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "e.g. 3.12.3"
+    validations:
+      required: true
+  - type: input
+    id: deemix-version
+    attributes:
+      label: deemix version
+      description: Output of `pip show deemix`.
+      placeholder: "e.g. 3.6.6"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. Ubuntu 24.04"

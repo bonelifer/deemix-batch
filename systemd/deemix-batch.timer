@@ -1,0 +1,11 @@
+[Unit]
+Description=Run deemix-batch.service periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+# OnBootSec schedules a fresh run after startup. This monotonic timer does
+# not replay runs missed while the machine was off.
+
+[Install]
+WantedBy=timers.target
