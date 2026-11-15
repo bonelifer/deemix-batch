@@ -3,7 +3,7 @@ Description=Move finished deemix downloads to their destination
 
 [Service]
 Type=oneshot
-WorkingDirectory=%h/Desktop/repos/misc/deemix-batch
+WorkingDirectory=%h/Desktop/repos/music/deemix-batch
 # install.sh renders the actual project/staging paths with systemd quoting.
 # If copying manually, edit both paths and --source yourself.
-ExecStart=%h/Desktop/repos/misc/deemix-batch/sync_to_dest.py --source %h/deemix-downloads
+ExecStart=%h/Desktop/repos/music/deemix-batch/sync_to_dest.py --source %h/deemix-downloads
