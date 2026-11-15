@@ -1,0 +1,13 @@
+[Unit]
+Description=Run release-monitor.service daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30min
+# Persistent catches up one missed run after the machine was off, so a
+# release window is not skipped; new releases stay "new" for
+# RELEASE_MAX_AGE_DAYS anyway.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

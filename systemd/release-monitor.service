@@ -1,0 +1,10 @@
+[Unit]
+Description=Check followed artists for new Deezer releases and download them
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Desktop/repos/misc/deemix-batch
+# install.sh --release-monitor renders the actual project path with systemd
+# quoting. If copying manually, edit both paths yourself.
+ExecStart=%h/Desktop/repos/misc/deemix-batch/monitor_releases.py check --download

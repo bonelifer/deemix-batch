@@ -6,3 +6,4 @@ artists.txt
 done.txt
 .deemix-artist-venv/
 music/
+.release-monitor-venv/

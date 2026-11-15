@@ -1,18 +1,32 @@
 #!/usr/bin/env bash
-# Installs deemix-batch's systemd --user units (timer-driven sync_to_dest.py).
+# Installs deemix-batch's systemd --user units (timer-driven sync_to_dest.py,
+# and optionally the daily release monitor).
 #
-# Usage: ./install.sh [staging-directory]
+# Usage: ./install.sh [-r|--release-monitor] [staging-directory]
 #   <staging-directory> is the local folder deemix downloads land in --
 #   the same path you'd pass to download_artists.py -o. If omitted, it's
 #   read from STAGING_DIR in .env instead.
+#   -r/--release-monitor also installs release-monitor.timer, which runs
+#   "monitor_releases.py check --download" once a day.
 set -Eeuo pipefail
 
-if [ "$#" -gt 1 ]; then
-    echo "Usage: $0 [staging-directory]" >&2
-    exit 1
-fi
-
-staging_dir=${1-}
+usage="Usage: $0 [-r|--release-monitor] [staging-directory]"
+release_monitor=false
+staging_dir=
+for argument in "$@"; do
+    case "$argument" in
+        -r|--release-monitor) release_monitor=true ;;
+        -h|--help) echo "$usage"; exit 0 ;;
+        -*) echo "Unknown option: $argument" >&2; echo "$usage" >&2; exit 1 ;;
+        *)
+            if [ -n "$staging_dir" ]; then
+                echo "$usage" >&2
+                exit 1
+            fi
+            staging_dir=$argument
+            ;;
+    esac
+done
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 user_unit_dir="$HOME/.config/systemd/user"
 
@@ -41,7 +55,7 @@ fi
 
 if [ -z "$staging_dir" ]; then
     echo "Error: no staging directory given, and STAGING_DIR isn't set in .env." >&2
-    echo "Usage: $0 [staging-directory]" >&2
+    echo "$usage" >&2
     exit 1
 fi
 
@@ -52,7 +66,8 @@ fi
 mkdir -p "$user_unit_dir"
 
 # Render systemd arguments directly; shell/sed escaping is not unit-file escaping.
-python3 - "$script_dir" "$staging_dir" "$user_unit_dir/deemix-batch.service" <<'PYUNIT'
+render_unit() {
+python3 - "$script_dir" "$staging_dir" "$user_unit_dir/$1.service" "$1" <<'PYUNIT'
 import os
 from pathlib import Path
 import sys
@@ -61,6 +76,7 @@ import tempfile
 project = Path(sys.argv[1]).resolve()
 staging = Path(sys.argv[2]).expanduser().resolve()
 target = Path(sys.argv[3])
+unit = sys.argv[4] if len(sys.argv) > 4 else 'deemix-batch'
 
 
 def quote(value, command=False):
@@ -74,12 +90,17 @@ def quote(value, command=False):
     return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
-source = (project / 'systemd/deemix-batch.service').read_text()
+source = (project / 'systemd' / f'{unit}.service').read_text()
 lines = []
 for line in source.splitlines():
     if line.startswith('WorkingDirectory='):
         quote(project)  # Validate line breaks; this directive takes an unquoted path.
         line = 'WorkingDirectory=' + str(project).replace('%', '%%')
+    elif line.startswith('ExecStart=') and unit == 'release-monitor':
+        # Same staging folder the sync service watches; overrides .env.
+        lines.append('Environment=' + quote(f'STAGING_DIR={staging}'))
+        line = ('ExecStart=' + quote(project / 'monitor_releases.py', command=True)
+                + ' check --download')
     elif line.startswith('ExecStart='):
         line = ('ExecStart=' + quote(project / 'sync_to_dest.py', command=True)
                 + ' --source ' + quote(staging, command=True))
@@ -97,11 +118,21 @@ finally:
     if temporary is not None:
         temporary.unlink(missing_ok=True)
 PYUNIT
+}
+
+render_unit deemix-batch
 cp "$script_dir/systemd/deemix-batch.timer" "$user_unit_dir/deemix-batch.timer"
+timers=(deemix-batch.timer)
+if [ "$release_monitor" = true ]; then
+    render_unit release-monitor
+    cp "$script_dir/systemd/release-monitor.timer" \
+        "$user_unit_dir/release-monitor.timer"
+    timers+=(release-monitor.timer)
+fi
 
 systemctl --user daemon-reload
-systemctl --user enable --now deemix-batch.timer
+systemctl --user enable --now "${timers[@]}"
 
 echo
-echo "Installed and started. Next scheduled run:"
-systemctl --user list-timers deemix-batch.timer --no-pager
+echo "Installed and started. Next scheduled run(s):"
+systemctl --user list-timers "${timers[@]}" --no-pager
