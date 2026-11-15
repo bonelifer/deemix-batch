@@ -99,6 +99,52 @@ interruptions, and repeated completion entries are not duplicated. If another
 operation owns the lock, the new command exits with a clear message instead
 of touching its files. Wait for the existing operation to finish before retrying.
 
+## Watching for new releases
+
+Two more scripts replace deemon's new-release monitoring. They check
+Deezer directly, so whatever they find can be downloaded right away.
+
+`import_artists.py` builds the list of artists to follow, either from MPD
+(`-m`) or by reading the tags of your music files (`-s DIR`). Each name is
+looked up on Deezer and has to match exactly. A joined name like
+`Johnny Cash/Willie Nelson` is split into its artists when the whole name
+doesn't match. Names it still can't match go on an "unresolved" list for you
+to sort out. Running it again only adds artists. It never unfollows anyone.
+
+`monitor_releases.py` does the rest. `check` looks at every followed
+artist's Deezer albums and queues the new ones; `download` hands each one to
+deemix by album URL, into `STAGING_DIR`, under the same lock as everything
+else. The sync timer moves them on as usual, and `retry_failed_tracks.py`
+still handles missing tracks.
+
+```sh
+python3 import_artists.py --mpd --dry-run    # see who would be followed
+python3 import_artists.py --mpd              # or: --scan /path/to/music
+python3 monitor_releases.py artists --unresolved
+python3 monitor_releases.py follow 62 --for "USA for Africa"
+python3 monitor_releases.py check --download
+python3 monitor_releases.py list --status queued
+```
+
+The first check of a new artist only records what's already out (the
+"baseline"), so following someone doesn't download their whole catalog. Use
+`queue ALBUM_ID` for anything from the baseline you want anyway. After that, a
+release is queued when its type is in `RELEASE_TYPES`, it came out within
+`RELEASE_MAX_AGE_DAYS`, its title has no `RELEASE_EXCLUDE_KEYWORDS` word, and
+you don't already have another edition of it. A deluxe edition with more
+tracks replaces a smaller one that's still queued. `ignore ALBUM_ID` skips
+a release for good.
+
+Set `APPRISE_URLS` in `.env` to get one summary per run on any service
+Apprise supports (ntfy, Gotify, email, Discord and so on). Check it with
+`monitor_releases.py test-notify`. Everything is kept in `state/releases.db`.
+`--help` on either script lists every command and setting.
+
+Apprise (notifications) and mutagen (`--scan`) are installed into a private
+`.release-monitor-venv` the first time they're needed. That needs a Python
+with venv support; on Ubuntu that's the `python3.X-venv` package for your
+Python version.
+
 ## Running automatically
 
 `systemd/deemix-batch.service` + `deemix-batch.timer` run `sync_to_dest.py`
@@ -122,6 +168,11 @@ systemctl --user daemon-reload
 systemctl --user enable --now deemix-batch.timer
 ```
 
+`./install.sh --release-monitor` also installs `release-monitor.timer`,
+which runs `monitor_releases.py check --download` once a day. If the machine
+was off at the scheduled time, it runs once it's back on. You can still run
+it by hand whenever you like.
+
 `download_artists.py` isn't timered. That one's meant to be run by hand,
 whenever you've actually got artists worth downloading.
 
@@ -132,6 +183,13 @@ Run the offline safety regression suite:
 ```sh
 python3 -m unittest discover -s tests -v
 ```
+
+`tests/docker-test.sh` runs the same suite in throwaway containers on
+Python 3.10 and the latest Python.
+
+## TODO
+
+Ideas not yet built, practical and speculative alike: [`docs/TODO.md`](docs/TODO.md).
 
 ## Contributing
 
